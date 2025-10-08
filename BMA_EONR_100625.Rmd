@@ -1,0 +1,441 @@
+
+# Packages
+```{r}
+library(tidyverse)
+library(rstan)
+library(bridgesampling)
+```
+
+
+# BAYESIAN MODEL AVERAGING
+
+# 1) Quadratic model
+
+## 1.1) Stan code
+Define the Stan code for the quadratic model
+```{r}
+stan_model_QD <- "// The input data is a vector 'y' of length 'N'.
+data {
+  int<lower=0> N;
+  real<lower=0> pN; // Fertilizer price
+  real<lower=0> pC; // Corn price
+  vector[N] y;
+  vector[N] x;
+}
+
+transformed data {
+   real<lower=0> PR;
+   PR = pN/pC;
+}
+
+// The parameters accepted by the model. Our model
+// accepts two parameters 'mu' and 'sigma'.
+parameters {
+  real<lower=0> b0;
+  real<lower=0> b1;
+  real<lower=0> b2;
+  real<lower=0> sigma;
+}
+
+// The model to be estimated. We model the output
+// 'y' to be normally distributed with mean 'mu'
+// and standard deviation 'sigma'.
+model {
+  // Define the mean
+  // Define the likelihood
+  target += normal_lpdf(y | b0 + (b1 * x) - (b2 * x^2), sigma);
+  // Define the priors
+  target += gamma_lpdf(b0 | 260.42, 0.0361);
+  target += gamma_lpdf(b1 | 36.98,  0.86);
+  target += gamma_lpdf(b2 | 1.0125, 11.25);
+  target += inv_gamma_lpdf(sigma | 1270, 2537953);
+
+}
+
+generated quantities {
+// Define the economic optimum N rate
+real<lower=0> EONR;
+// Calculate the economic optimum N rate
+EONR = fmax((b1-PR)/(2*b2),0);
+}
+
+"
+
+```
+
+
+## 1.2) Create a function to fit the model
+```{r}
+bayes_model_QD <- function(x,y,pN,pC,
+                        param_saved = c("b0", "b1",
+                                        "b2", "EONR",
+                                        "sigma"
+                                        ),
+                        chains = 4, iter = 4000, warmup = 2000,
+                        cores = 1, apt_del = 0.9, thin = 5, 
+                        seed = 79
+                        ){
+  
+  df.list <- list(x = x,
+               y = y,
+               pN=pN,
+               pC=pC,
+               N = length(y))
+  
+  stan(model_code = stan_model_QD,
+       data = df.list,
+       chains = chains,
+       iter = iter,
+       warmup = warmup,
+       cores = cores,
+       control=list(adapt_delta= apt_del),
+       thin = thin,
+       seed = seed,
+       pars = param_saved
+       )
+  
+}
+```
+
+## 1.3) Fit the model
+```{r}
+bay.mod_QD <- bayes_model_QD(
+      x = df$x,
+      y = df$y,
+      # Nitrogen price
+      pN = 0.789,
+      # Corn price
+      pC = 0.154
+    )
+
+# Convergence checking
+summary(bay.mod_QD)
+```
+
+
+
+# 2) Quadratic Plateau
+## 2.1) Stan code
+Define the Stan code for the quadratic plateau model
+
+```{r}
+stan_model_QP <- "// The input data is a vector 'y' of length 'N'.
+data {
+  int<lower=0> N;
+  real<lower=0> pN; // Fertilizer price
+  real<lower=0> pC; // Corn price
+  vector[N] y;
+  vector[N] x;
+}
+
+transformed data {
+   real<lower=0> PR;
+   PR = pN/pC;
+}
+
+// The parameters accepted by the model. Our model
+// accepts two parameters 'mu' and 'sigma'.
+parameters {
+  real<lower=0> b0;
+  real<lower=0> b1;
+  real<lower=0> b2;
+  real<lower=0> sigma;
+}
+
+// The model to be estimated. We model the output
+// 'y' to be normally distributed with mean 'mu'
+// and standard deviation 'sigma'.
+model {
+  vector[N] mu;
+  // Define the mean
+  for(i in 1:N) {
+  if (x[i] < b1 / (2 * b2)) {
+      mu[i] = b0 + b1 * x[i] - b2 * x[i]^2;
+    } else {
+      real xp = b1 / (2 * b2);
+      mu[i] = b0 + b1 * xp - b2 * xp^2;
+    }
+   }
+  
+  // Define the likelihood
+  target += normal_lpdf(y | mu, sigma);
+  // Define the priors
+  target += gamma_lpdf(b0 | 242.742, 0.03484);
+  target += gamma_lpdf(b1 | 28.303, 0.561);
+  target += gamma_lpdf(b2 | 1.83, 15.125);
+  target += inv_gamma_lpdf(sigma | 1436, 2870982);
+}
+
+generated quantities {
+// Define the economic optimum N rate
+real<lower=0> EONR;
+// Calculate the economic optimum N rate
+EONR = fmax((b1-PR)/(2*b2),0);
+}
+
+"
+
+```
+
+## 2.2) Create a function to fit the model
+```{r}
+bayes_model_QP <- function(x,y,pN,pC,
+                        param_saved = c("b0", "b1",
+                                        "b2", "EONR",
+                                        "sigma"
+                                        ),
+                        chains = 4, iter = 4000, warmup = 2000,
+                        cores = 1, apt_del = 0.9, thin = 5, 
+                        seed = 79
+                        ){
+  
+  df.list <- list(x = x,
+               y = y,
+               pN=pN,
+               pC=pC,
+               N = length(y))
+  
+  stan(model_code = stan_model_QP,
+       data = df.list,
+       chains = chains,
+       iter = iter,
+       warmup = warmup,
+       cores = cores,
+       control=list(adapt_delta= apt_del),
+       thin = thin,
+       seed = seed,
+       pars = param_saved
+       )
+  
+}
+```
+
+## 2.3) Fit the model
+```{r}
+bay.mod_QP <- bayes_model_QP(
+      x = df$x,
+      y = df$y,
+      # Nitrogen price
+      pN = 0.789,
+      # Corn price
+      pC = 0.154)
+
+# Convergence checking
+summary(bay.mod_QP)
+```
+
+
+
+# 3) Linear Plateau model
+## 3.1) Stan code
+Define the Stan code for the linear plateau model
+```{r}
+stan_model_LinPl <- "// The input data is a vector 'y' of length 'N'.
+data {
+  int<lower=0> N;
+  vector[N] y;
+  vector[N] x;
+}
+
+// The parameters accepted by the model. Our model
+// accepts two parameters 'mu' and 'sigma'.
+parameters {
+  real<lower=0> b0;
+  real<lower=0> b1;
+  real<lower=0> EONR; // The EONR in this model corresponds to the break point
+  real<lower=0> sigma;
+}
+
+// The model to be estimated. We model the output
+// 'y' to be normally distributed with mean 'mu'
+// and standard deviation 'sigma'.
+model {
+
+vector[N] mu;
+  // Define the mean
+  for(i in 1:N) {
+  if (x[i] < EONR) {
+      mu[i] = b0 + b1 * x[i];
+    } else {
+      mu[i] = b0 + b1 * EONR;
+    }
+  }
+  
+
+  // Define the likelihood
+  target += normal_lpdf(y | mu, sigma);
+  // Define the priors
+  target += gamma_lpdf(b0 | 267.6567, 0.03658);
+  target += gamma_lpdf(b1 | 17.066, 0.512);
+  target += gamma_lpdf(EONR | 75, 0.5);
+  target += inv_gamma_lpdf(sigma | 1306, 2609858);
+}
+
+"
+
+```
+
+
+## 3.2) Create a function to fit the model
+```{r}
+bayes_model_LinPl <- function(x,y,
+                        param_saved = c("b0", "b1",
+                                        "EONR",
+                                        "sigma"
+                                        ),
+                        chains = 4, iter = 4000, warmup = 2000,
+                        cores = 1, apt_del = 0.9, thin = 5, 
+                        seed = 79
+                        ){
+  
+  df.list <- list(x = x,
+               y = y,
+               N = length(y))
+  
+  stan(model_code = stan_model_LinPl,
+       data = df.list,
+       chains = chains,
+       iter = iter,
+       warmup = warmup,
+       cores = cores,
+       control=list(adapt_delta= apt_del),
+       thin = thin,
+       seed = seed,
+       pars = param_saved
+       )
+  
+}
+```
+
+## 3.3) Fit the model
+```{r}
+bay.mod_LP <- bayes_model_LinPl(
+      x = df$x,
+      y = df$y)
+
+# Convergence checking
+summary(bay.mod_LP)
+```
+
+
+# 4) Mitscherlich model
+
+## 4.1) Stan code
+Define the Stan code for the Mitscherlich model
+```{r}
+stan_model_MIT <- "// The input data is a vector 'y' of length 'N'.
+data {
+  int<lower=0> N;
+  real<lower=0> pN; // Fertilizer price
+  real<lower=0> pC; // Corn price
+  vector[N] y;
+  vector[N] x;
+}
+
+// The parameters accepted by the model. Our model
+// accepts two parameters 'mu' and 'sigma'.
+parameters {
+  real<lower=0> b0;
+  real<lower=0> b1;
+  real<lower=0> b2;
+  real<lower=0> sigma;
+}
+
+// The model to be estimated. We model the output
+// 'y' to be normally distributed with mean 'mu'
+// and standard deviation 'sigma'.
+model {
+  // Define the mean
+  // Define the likelihood
+  target += normal_lpdf(y |  b0+(b1-b0)*exp(-b2*x), sigma);
+  // Define the priors
+  target += gamma_lpdf(b0 | 874.3211,  0.0697);
+  target += gamma_lpdf(b1 | 185.7578, 0.02725);
+  target += gamma_lpdf(b2 | 1.44, 120);
+  target += inv_gamma_lpdf(sigma | 1304, 2606673);
+}
+
+generated quantities {
+// Define the economic optimum N rate
+real<lower=0> EONR;
+// Calculate the economic optimum N rate
+EONR = fmax(-log(-pN/(pC*(b1-b0)*b2))/b2,0);
+}
+
+"
+
+```
+
+
+## 4.2) Create a function to fit the model
+```{r}
+bayes_model_MIT <- function(x,y,pN,pC,
+                        param_saved = c("b0", "b1",
+                                        "b2", "EONR",
+                                        "sigma"
+                                        ),
+                        chains = 4, iter = 4000, warmup = 2000,
+                        cores = 1, apt_del = 0.9, thin = 5, 
+                        seed = 79
+                        ){
+  
+  df.list <- list(x = x,
+               y = y,
+               pN=pN,
+               pC=pC,
+               N = length(y))
+  
+  stan(model_code = stan_model_MIT,
+       data = df.list,
+       chains = chains,
+       iter = iter,
+       warmup = warmup,
+       cores = cores,
+       control=list(adapt_delta= apt_del),
+       thin = thin,
+       seed = seed,
+       pars = param_saved
+       )
+  
+}
+
+```
+
+
+## 4.3) Fit the model
+```{r}
+bay.mod_MIT <- bayes_model_MIT(x = df$x,
+                               y = df$y,
+                               # Nitrogen price
+                               pN=0.789,
+                               # Corn price
+                               pC=0.154
+                               )
+
+# Convergence checking
+summary(bay.mod_MIT)
+```
+
+
+# 5) Model Probability
+## 5.1) Computes log marginal likelihood via bridge sampling
+```{r}
+QD_marglog <- bridgesampling::bridge_sampler(bay.mod_QD,silent = TRUE)
+QP_marglog <- bridgesampling::bridge_sampler(bay.mod_QP,silent = TRUE)
+LP_marglog <- bridgesampling::bridge_sampler(bay.mod_LP,silent = TRUE)
+MIT_marglog <- bridgesampling::bridge_sampler(bay.mod_MIT,silent = TRUE)
+```
+
+## 5.2) Compute posterior model probabilities from marginal likelihoods.
+```{r}
+m_prob <- bridgesampling::post_prob(QD_marglog,QP_marglog,
+                                    LP_marglog,MIT_marglog,
+                                    # Define equal prior model probability
+                                    prior_prob = c(.25,.25,
+                                                   .25,.25))
+
+m_prob
+```
+
+
+
