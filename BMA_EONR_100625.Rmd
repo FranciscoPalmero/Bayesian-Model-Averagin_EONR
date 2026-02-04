@@ -45,10 +45,10 @@ model {
   // Define the likelihood
   target += normal_lpdf(y | b0 + (b1 * x) - (b2 * x^2), sigma);
   // Define the priors
-  target += gamma_lpdf(b0 | 260.42, 0.0361);
-  target += gamma_lpdf(b1 | 36.98,  0.86);
-  target += gamma_lpdf(b2 | 1.0125, 11.25);
-  target += inv_gamma_lpdf(sigma | 1270, 2537953);
+  target += gamma_lpdf(b0 | 2.93, 0.00049);
+  target += gamma_lpdf(b1 | 2.25, 0.05);
+  target += gamma_lpdf(b2 | 0.75, 4);
+  target += student_t_lpdf(sigma | 3, 0, 5);
 
 }
 
@@ -160,10 +160,10 @@ model {
   // Define the likelihood
   target += normal_lpdf(y | mu, sigma);
   // Define the priors
-  target += gamma_lpdf(b0 | 242.742, 0.03484);
-  target += gamma_lpdf(b1 | 28.303, 0.561);
-  target += gamma_lpdf(b2 | 1.83, 15.125);
-  target += inv_gamma_lpdf(sigma | 1436, 2870982);
+  target += gamma_lpdf(b0 | 2.93, 0.00049);
+  target += gamma_lpdf(b1 | 2.25, 0.05);
+  target += gamma_lpdf(b2 | 0.75, 4);
+  target += student_t_lpdf(sigma | 3, 0, 5);
 }
 
 generated quantities {
@@ -265,10 +265,10 @@ vector[N] mu;
   // Define the likelihood
   target += normal_lpdf(y | mu, sigma);
   // Define the priors
-  target += gamma_lpdf(b0 | 267.6567, 0.03658);
-  target += gamma_lpdf(b1 | 17.066, 0.512);
-  target += gamma_lpdf(EONR | 75, 0.5);
-  target += inv_gamma_lpdf(sigma | 1306, 2609858);
+  target += gamma_lpdf(b0 | 2.93, 0.00049);
+  target += gamma_lpdf(b1 | 2.25, 0.05);
+  target += gamma_lpdf(EONR | 1.55, 0.0103);
+  target += student_t_lpdf(sigma | 3, 0, 5);
 }
 
 "
@@ -349,10 +349,10 @@ model {
   // Define the likelihood
   target += normal_lpdf(y |  b0+(b1-b0)*exp(-b2*x), sigma);
   // Define the priors
-  target += gamma_lpdf(b0 | 874.3211,  0.0697);
-  target += gamma_lpdf(b1 | 185.7578, 0.02725);
-  target += gamma_lpdf(b2 | 1.44, 120);
-  target += inv_gamma_lpdf(sigma | 1304, 2606673);
+  target += gamma_lpdf(b0 | 4,  0.00033);
+  target += gamma_lpdf(b1 | 2.25, 0.000375);
+  target += gamma_lpdf(b2 | 0.444, 44.444);
+  target += student_t_lpdf(sigma | 3, 0, 5);
 }
 
 generated quantities {
@@ -436,6 +436,7 @@ m_prob <- bridgesampling::post_prob(QD_marglog,QP_marglog,
 
 m_prob
 ```
+
 
 
 
